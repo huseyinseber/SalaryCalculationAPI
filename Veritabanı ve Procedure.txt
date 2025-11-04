@@ -1,0 +1,91 @@
+-- Create Database
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'EmployeePayroll')
+BEGIN
+    CREATE DATABASE EmployeePayroll;
+END
+GO
+
+USE EmployeePayroll;
+GO
+
+-- Create Tables
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Employees' and xtype='U')
+BEGIN
+    CREATE TABLE Employees (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        TCKN NVARCHAR(11) NOT NULL UNIQUE,
+        FirstName NVARCHAR(50) NOT NULL,
+        LastName NVARCHAR(50) NOT NULL,
+        Type INT NOT NULL,
+        BaseSalary DECIMAL(18,2) DEFAULT 0,
+        DailyRate DECIMAL(18,2) DEFAULT 0,
+        OvertimeRate DECIMAL(18,2) DEFAULT 0,
+        CreatedDate DATETIME2 DEFAULT GETDATE()
+    );
+END
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WorkLogs' and xtype='U')
+BEGIN
+    CREATE TABLE WorkLogs (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        EmployeeId INT NOT NULL FOREIGN KEY REFERENCES Employees(Id) ON DELETE CASCADE,
+        Month INT NOT NULL CHECK (Month >= 1 AND Month <= 12),
+        Year INT NOT NULL CHECK (Year >= 2000 AND Year <= 2100),
+        WorkedDays INT DEFAULT 0 CHECK (WorkedDays >= 0),
+        OvertimeHours INT DEFAULT 0 CHECK (OvertimeHours >= 0),
+        CreatedDate DATETIME2 DEFAULT GETDATE(),
+        CONSTRAINT UK_WorkLog_Employee_Period UNIQUE (EmployeeId, Month, Year)
+    );
+END
+GO
+
+-- Create Stored Procedures
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'sp_GetEmployeesWithPayroll')
+    DROP PROCEDURE sp_GetEmployeesWithPayroll
+GO
+
+CREATE PROCEDURE sp_GetEmployeesWithPayroll
+    @Month INT,
+    @Year INT
+AS
+BEGIN
+    SELECT 
+        e.Id,
+        e.TCKN,
+        e.FirstName,
+        e.LastName,
+        e.Type,
+        e.BaseSalary,
+        e.DailyRate,
+        e.OvertimeRate,
+        e.CreatedDate,
+        wl.Id,
+        wl.EmployeeId,
+        wl.Month,
+        wl.Year,
+        wl.WorkedDays,
+        wl.OvertimeHours,
+        wl.CreatedDate
+    FROM Employees e
+    LEFT JOIN WorkLogs wl ON e.Id = wl.EmployeeId 
+        AND wl.Month = @Month 
+        AND wl.Year = @Year
+END
+GO
+
+-- Insert Sample Data
+IF NOT EXISTS (SELECT 1 FROM Employees)
+BEGIN
+    INSERT INTO Employees (TCKN, FirstName, LastName, Type, BaseSalary, DailyRate, OvertimeRate) VALUES
+    ('12345678901', 'Ahmet', 'Yılmaz', 1, 5000, 0, 0),
+    ('12345678902', 'Ayşe', 'Demir', 2, 0, 200, 0),
+    ('12345678903', 'Mehmet', 'Kaya', 3, 4000, 0, 50),
+    ('12345678904', 'Fatma', 'Şahin', 1, 5500, 0, 0),
+    ('12345678905', 'Mustafa', 'Çelik', 2, 0, 180, 0);
+
+    INSERT INTO WorkLogs (EmployeeId, Month, Year, WorkedDays, OvertimeHours) VALUES
+    (2, 9, 2024, 20, 0),
+    (3, 9, 2024, 0, 10),
+    (5, 9, 2024, 22, 0);
+END
+GO
